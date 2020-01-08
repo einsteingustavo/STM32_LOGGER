@@ -30,8 +30,8 @@ Serial pc(PA_2, PA_3);                              // Debug purposes
 LSM6DS3 LSM6DS3(PB_9, PB_8);                        // Gyroscope/Accelerometer declaration (SDA,SCL)
 SDBlockDevice   sd(PB_15, PB_14, PB_13, PB_12);     // mosi, miso, sck, cs
 FATFileSystem   fileSystem("sd");
-DigitalOut warning(PA_12);                          // When device is ready, led is permanently OFF
-DigitalOut logging(PA_15);                          // When data is beign acquired, led is ON
+DigitalOut warning(PA_15);                          // When device is ready, led is permanently OFF
+DigitalOut logging(PA_12);                          // When data is beign acquired, led is ON
 InterruptIn start(PB_4,PullUp);                            // Press button to start/stop acquisition
 InterruptIn freq_chan1(PB_5,PullUp);                       // Frequency channel 1
 InterruptIn freq_chan2(PB_6,PullUp);                       // Frequency channel 2
@@ -136,7 +136,6 @@ int main()
         warning = 1;                                
         pc.printf("\r\nrunning=%d\r\n", running);   // For some reason if this line is empty the code doesn't run
     }
-    start.fall(NULL);
     
     /* Create RUN directory */
     mkdir(name_dir, 0777);
@@ -193,7 +192,7 @@ int main()
         }
         
         /* Software debounce for start button */
-        if((t.read_ms() > 10) && (t.read_ms() < 500))
+        if((t.read_ms() > 10) && (t.read_ms() < 1000))
             start.fall(toggle_logging);
     }
     
@@ -270,4 +269,5 @@ void freq_channel2_ISR()
 void toggle_logging()
 {
     running = !running;
+    start.fall(NULL);
 }
