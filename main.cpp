@@ -51,15 +51,15 @@ typedef struct
 Timer t;                                        // Device timer
 Ticker acq;                                     // Acquisition timer interrupt source
 CircularBuffer<packet_t, BUFFER_SIZE> buffer;   // Acquisition buffer
-int front = -1, rear =-1;                       // Queue components
 int buffer_counter = 0;                         // Packet currently in buffer
-int err;
+int err;                                        // SD library utility
 bool running = false;                           // Device status
 bool isAnalogReady = false;
 uint16_t pulse_counter1 = 0,
          pulse_counter2 = 0,                    // Frequency counter variables
          last_acq;                              // Time of last acquisition
 packet_t acq_pck;                               // Current data packet
+
 void sampleISR();                               // Data acquisition ISR
 uint32_t count_files_in_sd(const char *fsrc);   // Compute number of files in SD
 void freq_channel1_ISR();                       // Frequency counter ISR, channel 1
