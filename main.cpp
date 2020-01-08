@@ -1,6 +1,7 @@
 /*
     Data Logger implementation in STM32F103C8T6.
     Inputs:
+        1x External Accelerometer and Gyroscope (LSM6DS3)
         x3 Analog Inputs;
         x2 Digital (Frequency) Inputs;
     In this set, it is designed for a 200Hz sample rate.
