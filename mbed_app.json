@@ -1,0 +1,7 @@
+{
+    "target_overrides": {
+        "*": {
+            "target.components_add": ["SD"]
+        }
+    }
+}
