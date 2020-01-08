@@ -59,7 +59,7 @@ int main()
                 break;
             }   
         
-            printf("~~~~~~~~PART %d ~~~~~~~~", part);
+            printf("\n~~~~~~~~PART %d ~~~~~~~~", part);
             
             while(1){
   	
