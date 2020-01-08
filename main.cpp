@@ -63,12 +63,10 @@ CircularBuffer<packet_t, BUFFER_SIZE> buffer;   // Acquisition buffer
 int buffer_counter = 0;                         // Packet currently in buffer
 int err;                                        // SD library utility
 bool running = false;                           // Device status
-bool isAnalogReady = false;
+bool StorageTrigger = false;
 uint16_t pulse_counter1 = 0,
          pulse_counter2 = 0,                    // Frequency counter variables
-         last_acq,                              // Time of last acquisition
          acc_addr = 0;                          // LSM6DS3 address, if not connected address is 0 and data is not stored
-packet_t acq_pck;                               // Current data packet
 
 void sampleISR();                               // Data acquisition ISR
 uint32_t count_files_in_sd(const char *fsrc);   // Compute number of files in SD
@@ -151,6 +149,48 @@ int main()
         
     while(running)
     {
+        if(StorageTrigger)
+        {   
+            packet_t acq_pck;                                  // Current data packet
+            static uint16_t last_acq = t.read_ms();            // Time of last acquisition                   
+
+            /* Store LSM6DS3 data if it's connected */
+            if (acc_addr != 0)
+            {
+                LSM6DS3.readAccel();                    // Read Accelerometer data
+                LSM6DS3.readGyro();                     // Read Gyroscope data
+        
+                acq_pck.acclsmx = LSM6DS3.ax_raw;
+                acq_pck.acclsmy = LSM6DS3.ay_raw;   
+                acq_pck.acclsmz = LSM6DS3.az_raw;
+                acq_pck.anglsmx = LSM6DS3.gx_raw;
+                acq_pck.anglsmy = LSM6DS3.gy_raw;
+                acq_pck.anglsmz = LSM6DS3.gz_raw;
+            }
+            else
+            {
+                acq_pck.acclsmx = 0;
+                acq_pck.acclsmy = 0;   
+                acq_pck.acclsmz = 0;
+                acq_pck.anglsmx = 0;
+                acq_pck.anglsmy = 0;
+                acq_pck.anglsmz = 0;
+            }
+                
+            acq_pck.analog0 = pot0.read_u16();          // Read analog sensor 0            
+            acq_pck.analog1 = pot1.read_u16();          // Read analog sensor 1
+            acq_pck.analog2 = pot2.read_u16();          // Read analog sensor 2
+            acq_pck.pulses_chan1 = pulse_counter1;      // Store frequence channel 1
+            acq_pck.pulses_chan2 = pulse_counter2;      // Store frequence channel 2
+            acq_pck.time_stamp = t.read_ms();           // Timestamp of data acquistion
+    
+            pulse_counter1= 0;
+            pulse_counter2= 0;
+            buffer.push(acq_pck);
+            buffer_counter++;
+        
+            StorageTrigger = false;
+        }
 
         if(buffer.full())
         {
@@ -160,15 +200,6 @@ int main()
         }
         else if(!buffer.empty())
         {   
-            
-            if(isAnalogReady)
-            {
-                acq_pck.analog0 = pot0.read_u16();          // Read analog sensor 0            
-                acq_pck.analog1 = pot1.read_u16();          // Read analog sensor 1
-                acq_pck.analog2 = pot2.read_u16();          // Read analog sensor 2
-                isAnalogReady = false;
-            }
-            
             pc.putc('G');                       // Debug message
             
             /* Remove packet from buffer and writes it to file */
@@ -205,40 +236,7 @@ int main()
 
 void sampleISR()
 {
-    isAnalogReady = true;
-    last_acq = t.read_ms();                     
-    
-    /* Store LSM6DS3 data if it's connected */
-    if (acc_addr != 0)
-    {
-        LSM6DS3.readAccel();                    // Read Accelerometer data
-        LSM6DS3.readGyro();                     // Read Gyroscope data
-        
-        acq_pck.acclsmx = LSM6DS3.ax_raw;
-        acq_pck.acclsmy = LSM6DS3.ay_raw;   
-        acq_pck.acclsmz = LSM6DS3.az_raw;
-        acq_pck.anglsmx = LSM6DS3.gx_raw;
-        acq_pck.anglsmy = LSM6DS3.gy_raw;
-        acq_pck.anglsmz = LSM6DS3.gz_raw;
-    }
-    else
-    {
-        acq_pck.acclsmx = 0;
-        acq_pck.acclsmy = 0;   
-        acq_pck.acclsmz = 0;
-        acq_pck.anglsmx = 0;
-        acq_pck.anglsmy = 0;
-        acq_pck.anglsmz = 0;
-    }
-    
-    acq_pck.pulses_chan1 = pulse_counter1;      // Store frequence channel 1
-    acq_pck.pulses_chan2 = pulse_counter2;      // Store frequence channel 2
-    acq_pck.time_stamp = t.read_ms();           // Timestamp of data acquistion
-    
-    pulse_counter1= 0;
-    pulse_counter2= 0;
-    buffer.push(acq_pck);
-    buffer_counter++;
+    StorageTrigger = true;
 }
 
 uint32_t count_files_in_sd(const char *fsrc)
