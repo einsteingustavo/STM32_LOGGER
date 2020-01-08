@@ -15,6 +15,7 @@
 #include <errno.h>
 #include "SDBlockDevice.h"
 #include "FATFileSystem.h"
+#include "LSM6DS3.h"
 
 #define BUFFER_SIZE 200                         // Acquisition buffer
 #define SAVE_WHEN 50                            // Number of packets to save (fail safe)
@@ -25,13 +26,14 @@ PwmOut signal_wave(PB_3);                           // Debug wave to test freque
 
 /* I/O */
 Serial pc(PA_2, PA_3);                              // Debug purposes
-SDBlockDevice   sd(PB_15, PB_14, PB_13, PB_12);  // mosi, miso, sck, cs
+LSM6DS3 LSM6DS3(PB_9, PB_8);                        // Gyroscope/Accelerometer declaration (SDA,SCL)
+SDBlockDevice   sd(PB_15, PB_14, PB_13, PB_12);     // mosi, miso, sck, cs
 FATFileSystem   fileSystem("sd");
 DigitalOut warning(PA_12);                          // When device is ready, led is permanently OFF
 DigitalOut logging(PA_15);                          // When data is beign acquired, led is ON
 InterruptIn start(PB_4,PullUp);                            // Press button to start/stop acquisition
-InterruptIn freq_chan1(PB_8,PullUp);                       // Frequency channel 1
-InterruptIn freq_chan2(PB_9,PullUp);                       // Frequency channel 2
+InterruptIn freq_chan1(PB_5,PullUp);                       // Frequency channel 1
+InterruptIn freq_chan2(PB_6,PullUp);                       // Frequency channel 2
 AnalogIn pot0(PB_1),
          pot1(PB_0),
          pot2(PA_7);
@@ -39,6 +41,12 @@ AnalogIn pot0(PB_1),
 /* Data structure */
 typedef struct
 {
+    int16_t acclsmx;
+    int16_t acclsmy;
+    int16_t acclsmz;
+    int16_t anglsmx;
+    int16_t anglsmy;
+    int16_t anglsmz;
     uint16_t analog0;
     uint16_t analog1;
     uint16_t analog2;
@@ -57,7 +65,8 @@ bool running = false;                           // Device status
 bool isAnalogReady = false;
 uint16_t pulse_counter1 = 0,
          pulse_counter2 = 0,                    // Frequency counter variables
-         last_acq;                              // Time of last acquisition
+         last_acq,                              // Time of last acquisition
+         acc_addr = 0;                          // LSM6DS3 address, if not connected address is 0 and data is not stored
 packet_t acq_pck;                               // Current data packet
 
 void sampleISR();                               // Data acquisition ISR
@@ -68,7 +77,7 @@ void toggle_logging();                          // Start button ISR
 
 int main()
 {   
-    pc.printf("\r\niniciou\r\n");
+    pc.printf("\r\nDebug 1\r\n");
     logging = 0;                                // logging led OFF
     int num_parts = 0,                          // Number of parts already saved
         num_files = 0,                          // Number of files in SD
@@ -79,6 +88,11 @@ int main()
     packet_t temp;
     signal_wave.period_us(50);
     signal_wave.write(0.5f);
+    
+    
+    /* Initialize accelerometer */
+    acc_addr = LSM6DS3.begin(LSM6DS3.G_SCALE_245DPS, LSM6DS3.A_SCALE_2G, \
+                             LSM6DS3.G_ODR_208, LSM6DS3.A_ODR_208);
     
     /* Wait for SD mount */
     do
@@ -104,15 +118,15 @@ int main()
         }
     }while(err);
     
-    pc.printf("\r\nDebug 1\r\n");
-    
     pc.printf("\r\nDebug 2\r\n");
+    
+    pc.printf("\r\nDebug 3\r\n");
     
     num_files = count_files_in_sd("/sd");
     sprintf(name_dir, "%s%d", "/sd/RUN", num_files + 1);
     
-    pc.printf("\r\nDebug 3\r\n");
-    pc.printf("\r\nnum_files = %d\r\n", num_files);
+    pc.printf("\r\nDebug 4\r\n");
+    pc.printf("\r\nNum_files = %d\r\n", num_files);
     
     start.fall(&toggle_logging);                    // Attach start button ISR
     
@@ -193,6 +207,29 @@ void sampleISR()
 {
     isAnalogReady = true;
     last_acq = t.read_ms();                     
+    
+    /* Store LSM6DS3 data if it's connected */
+    if (acc_addr != 0)
+    {
+        LSM6DS3.readAccel();                    // Read Accelerometer data
+        LSM6DS3.readGyro();                     // Read Gyroscope data
+        
+        acq_pck.acclsmx = LSM6DS3.ax_raw;
+        acq_pck.acclsmy = LSM6DS3.ay_raw;   
+        acq_pck.acclsmz = LSM6DS3.az_raw;
+        acq_pck.anglsmx = LSM6DS3.gx_raw;
+        acq_pck.anglsmy = LSM6DS3.gy_raw;
+        acq_pck.anglsmz = LSM6DS3.gz_raw;
+    }
+    else
+    {
+        acq_pck.acclsmx = 0;
+        acq_pck.acclsmy = 0;   
+        acq_pck.acclsmz = 0;
+        acq_pck.anglsmx = 0;
+        acq_pck.anglsmy = 0;
+        acq_pck.anglsmz = 0;
+    }
     
     acq_pck.pulses_chan1 = pulse_counter1;      // Store frequence channel 1
     acq_pck.pulses_chan2 = pulse_counter2;      // Store frequence channel 2
